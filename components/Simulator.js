@@ -257,114 +257,137 @@ export default function Simulator() {
     setCommands([]);
     setPage(0);
   };
-
+  const generatePathCoordinates = (path) => {
+    const allCoordinates = [];
+    
+    for (let i = 0; i < path.length - 1; i++) {
+      const current = path[i];
+      const next = path[i + 1];
+      
+      const xDiff = next.x - current.x;
+      const yDiff = next.y - current.y;
+      
+      // Add current point
+      allCoordinates.push({ x: current.x, y: current.y });
+      
+      // Generate intermediate points
+      const steps = Math.max(Math.abs(xDiff), Math.abs(yDiff));
+      for (let step = 1; step <= steps; step++) {
+        const x = Math.round(current.x + (xDiff * step / steps));
+        const y = Math.round(current.y + (yDiff * step / steps));
+        allCoordinates.push({ x, y });
+      }
+    }
+    
+    // Add the last point
+    if (path.length > 0) {
+      allCoordinates.push({ x: path[path.length - 1].x, y: path[path.length - 1].y });
+    }
+    
+    // Remove duplicates
+    return allCoordinates.filter((coord, index, self) =>
+      index === self.findIndex((t) => t.x === coord.x && t.y === coord.y)
+    );
+  };
   const renderGrid = () => {
-    // Initialize the empty rows array
     const rows = [];
-
-    const baseStyle = {
-      width: 25,
-      height: 25,
-      borderStyle: "solid",
-      borderTopWidth: 1,
-      borderBottomWidth: 1,
-      borderLeftWidth: 1,
-      borderRightWidth: 1,
-      padding: 0,
-    };
-
-    // Generate robot cells
     const robotCells = generateRobotCells();
+    const pathCoordinates = generatePathCoordinates(path);
 
-    // Generate the grid
     for (let i = 0; i < 20; i++) {
       const cells = [
-        // Header cells
         <td key={i} className="w-5 h-5 md:w-8 md:h-8">
-          <span className="text-sky-900 font-bold text-[0.6rem] md:text-base ">
+          <span className="text-black-900 font-bold text-[0.6rem] md:text-base ">
             {19 - i}
           </span>
         </td>,
       ];
-
+  
       for (let j = 0; j < 20; j++) {
         let foundOb = null;
         let foundRobotCell = null;
-
-        for (const ob of obstacles) {
+        let isPathCell = false;
+  
+        // Check if the current cell is part of the path
+        isPathCell = pathCoordinates.some(step => {
+          const transformed = transformCoord(step.x, step.y);
+          return transformed.x === i && transformed.y === j;
+        });
+  
+        // Check for obstacles
+        foundOb = obstacles.find(ob => {
           const transformed = transformCoord(ob.x, ob.y);
-          if (transformed.x === i && transformed.y === j) {
-            foundOb = ob;
-            break;
-          }
-        }
-
+          return transformed.x === i && transformed.y === j;
+        });
+  
+        // Check for robot cells
         if (!foundOb) {
-          for (const cell of robotCells) {
-            if (cell.x === i && cell.y === j) {
-              foundRobotCell = cell;
-              break;
-            }
-          }
+          foundRobotCell = robotCells.find(cell => cell.x === i && cell.y === j);
         }
-
+  
         if (foundOb) {
-          if (foundOb.d === Direction.WEST) {
-            cells.push(
-              <td className="border border-l-4 border-l-red-500 w-5 h-5 md:w-8 md:h-8 bg-blue-700" />
-            );
-          } else if (foundOb.d === Direction.EAST) {
-            cells.push(
-              <td className="border border-r-4 border-r-red-500 w-5 h-5 md:w-8 md:h-8 bg-blue-700" />
-            );
-          } else if (foundOb.d === Direction.NORTH) {
-            cells.push(
-              <td className="border border-t-4 border-t-red-500 w-5 h-5 md:w-8 md:h-8 bg-blue-700" />
-            );
-          } else if (foundOb.d === Direction.SOUTH) {
-            cells.push(
-              <td className="border border-b-4 border-b-red-500 w-5 h-5 md:w-8 md:h-8 bg-blue-700" />
-            );
-          } else if (foundOb.d === Direction.SKIP) {
-            cells.push(
-              <td className="border w-5 h-5 md:w-8 md:h-8 bg-blue-700" />
-            );
-          }
-        } else if (foundRobotCell) {
-          if (foundRobotCell.d !== null) {
-            cells.push(
-              <td
-                className={`border w-5 h-5 md:w-8 md:h-8 ${
-                  foundRobotCell.s != -1 ? "bg-red-500" : "bg-yellow-300"
-                }`}
-              />
-            );
-          } else {
-            cells.push(
-              <td className="bg-green-600 border-white border w-5 h-5 md:w-8 md:h-8" />
-            );
-          }
-        } else {
+          // Render obstacle cell (unchanged)
           cells.push(
-            <td className="border-black border w-5 h-5 md:w-8 md:h-8" />
+            <td 
+              key={`${i}-${j}`} 
+              className={`border w-5 h-5 md:w-8 md:h-8 bg-blue-700 ${
+                foundOb.d === Direction.WEST ? "border-l-4 border-l-red-500" :
+                foundOb.d === Direction.EAST ? "border-r-4 border-r-red-500" :
+                foundOb.d === Direction.NORTH ? "border-t-4 border-t-red-500" :
+                foundOb.d === Direction.SOUTH ? "border-b-4 border-b-red-500" :
+                ""
+              }`} 
+            />
+          );
+        } else if (foundRobotCell) {
+          // Render robot cell
+          cells.push(
+            <td
+              key={`${i}-${j}`}
+              className={`border w-5 h-5 md:w-8 md:h-8 ${
+                foundRobotCell.d !== null
+                  ? foundRobotCell.s !== -1
+                    ? "bg-red-500"
+                    : "bg-yellow-300"
+                  : "bg-green-600"
+              }`}
+            />
+          );
+        } else if (isPathCell) {
+          // Render path cell
+          cells.push(
+            <td 
+              key={`${i}-${j}`} 
+              className="border w-5 h-5 md:w-8 md:h-8 bg-blue-400" 
+            />
+          );
+        } else {
+          // Render empty cell
+          cells.push(
+            <td 
+              key={`${i}-${j}`} 
+              className="border-slate-300 border w-5 h-5 md:w-8 md:h-8" 
+            />
           );
         }
       }
-
+  
       rows.push(<tr key={19 - i}>{cells}</tr>);
     }
-
+  
+    // Add y-axis labels (unchanged)
     const yAxis = [<td key={0} />];
     for (let i = 0; i < 20; i++) {
       yAxis.push(
-        <td className="w-5 h-5 md:w-8 md:h-8">
-          <span className="text-sky-900 font-bold text-[0.6rem] md:text-base ">
+        <td key={`y-${i}`} className="w-5 h-5 md:w-8 md:h-8">
+          <span className="text-black-900 font-bold text-[0.6rem] md:text-base ">
             {i}
           </span>
         </td>
       );
     }
     rows.push(<tr key={20}>{yAxis}</tr>);
+  
     return rows;
   };
 
@@ -375,101 +398,102 @@ export default function Simulator() {
 
   return (
     <div className="flex flex-col items-center justify-center">
-      <div className="flex flex-col items-center text-center bg-sky-200 rounded-xl shadow-xl mb-8">
-        <h2 className="card-title text-black pt-4">Algorithm Simulator</h2>
+      <div className="flex flex-col items-center text-center p-4 m-2 bg-slate-300 rounded-xl shadow-xl mb-8">
+        <h2 className="card-title text-black ">Algorithm Simulator</h2>
       </div>
+      <div className="grid grid-cols-2 gap-4 items-center text-center bg-slate-300 rounded-xl shadow-xl p-6">
+  {/* First Column - Robot Position */}
+  <div>
+  <div className="card-body items-center text-center">
+    <h2 className="card-title text-black">Robot Position</h2>
+    <div className="form-control">
+      <label className="input-group input-group-horizontal">
+        <span className="bg-primary p-2">X</span>
+        <input
+          onChange={onChangeRobotX}
+          type="number"
+          placeholder="1"
+          min="1"
+          max="18"
+          className="input input-bordered text-blue-900 w-20"
+        />
+        <span className="bg-primary p-2">Y</span>
+        <input
+          onChange={onChangeRobotY}
+          type="number"
+          placeholder="1"
+          min="1"
+          max="18"
+          className="input input-bordered text-blue-900 w-20"
+        />
+        <span className="bg-primary p-2">D</span>
+        <select
+          onChange={onRobotDirectionInputChange}
+          value={robotDir}
+          className="select text-blue-900 py-2 pl-2 pr-6"
+        >
+          <option value={ObDirection.NORTH}>Up</option>
+          <option value={ObDirection.SOUTH}>Down</option>
+          <option value={ObDirection.WEST}>Left</option>
+          <option value={ObDirection.EAST}>Right</option>
+        </select>
+        <button className="btn btn-success p-2" onClick={onClickRobot}>
+          Set
+        </button>
+      </label>
+    </div>
+  </div>
 
-      <div className="flex flex-col items-center text-center bg-sky-200 rounded-xl shadow-xl">
-        <div className="card-body items-center text-center p-4">
-          <h2 className="card-title text-black">Robot Position</h2>
-          <div className="form-control">
-            <label className="input-group input-group-horizontal">
-              <span className="bg-primary p-2">X</span>
-              <input
-                onChange={onChangeRobotX}
-                type="number"
-                placeholder="1"
-                min="1"
-                max="18"
-                className="input input-bordered  text-blue-900 w-20"
-              />
-              <span className="bg-primary p-2">Y</span>
-              <input
-                onChange={onChangeRobotY}
-                type="number"
-                placeholder="1"
-                min="1"
-                max="18"
-                className="input input-bordered  text-blue-900 w-20"
-              />
-              <span className="bg-primary p-2">D</span>
-              <select
-                onChange={onRobotDirectionInputChange}
-                value={robotDir}
-                className="select text-blue-900 py-2 pl-2 pr-6"
-              >
-                <option value={ObDirection.NORTH}>Up</option>
-                <option value={ObDirection.SOUTH}>Down</option>
-                <option value={ObDirection.WEST}>Left</option>
-                <option value={ObDirection.EAST}>Right</option>
-              </select>
-              <button className="btn btn-success p-2" onClick={onClickRobot}>
-                Set
-              </button>
-            </label>
-          </div>
-        </div>
-      </div>
-
-      <div className="flex flex-col items-center text-center bg-sky-200 p-4 rounded-xl shadow-xl m-8">
-        <h2 className="card-title text-black pb-2">Add Obstacles</h2>
-        <div className="form-control">
-          <label className="input-group input-group-horizontal">
-            <span className="bg-primary p-2">X</span>
-            <input
-              onChange={onChangeX}
-              type="number"
-              placeholder="1"
-              min="0"
-              max="19"
-              className="input input-bordered  text-blue-900 w-20"
-            />
-            <span className="bg-primary p-2">Y</span>
-            <input
-              onChange={onChangeY}
-              type="number"
-              placeholder="1"
-              min="0"
-              max="19"
-              className="input input-bordered  text-blue-900 w-20"
-            />
-            <span className="bg-primary p-2">D</span>
-            <select
-              onChange={onDirectionInputChange}
-              value={directionInput}
-              className="select text-blue-900 py-2 pl-2 pr-6"
-            >
-              <option value={ObDirection.NORTH}>Up</option>
-              <option value={ObDirection.SOUTH}>Down</option>
-              <option value={ObDirection.WEST}>Left</option>
-              <option value={ObDirection.EAST}>Right</option>
-              <option value={ObDirection.SKIP}>None</option>
-            </select>
-            <button className="btn btn-success p-2" onClick={onClickObstacle}>
-              Add
-            </button>
-          </label>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-4 gap-x-2 gap-y-4 items-center">
+  {/* Second Column - Add Obstacles (for example) */}
+  <div className="card-body items-center text-center">
+    <h2 className="card-title text-black">Add Obstacles</h2>
+    <div className="form-control">
+      <label className="input-group input-group-horizontal">
+        <span className="bg-primary p-2">X</span>
+        <input
+          onChange={onChangeX}
+          type="number"
+          placeholder="1"
+          min="0"
+          max="19"
+          className="input input-bordered text-blue-900 w-20"
+        />
+        <span className="bg-primary p-2">Y</span>
+        <input
+          onChange={onChangeY}
+          type="number"
+          placeholder="1"
+          min="0"
+          max="19"
+          className="input input-bordered text-blue-900 w-20"
+        />
+        <span className="bg-primary p-2">D</span>
+        <select
+          onChange={onDirectionInputChange}
+          value={directionInput}
+          className="select text-blue-900 py-2 pl-2 pr-6"
+        >
+          <option value={ObDirection.NORTH}>Up</option>
+          <option value={ObDirection.SOUTH}>Down</option>
+          <option value={ObDirection.WEST}>Left</option>
+          <option value={ObDirection.EAST}>Right</option>
+          <option value={ObDirection.SKIP}>None</option>
+        </select>
+        <button className="btn btn-success p-2" onClick={onClickObstacle}>
+          Add
+        </button>
+      </label>
+    </div>
+  </div>
+</div>
+<div className="grid grid-cols-4 gap-x-2 gap-y-4 items-center">
         {obstacles.map((ob) => {
           return (
             <div
               key={ob}
-              className="badge flex flex-row text-black bg-sky-100 rounded-xl text-xs md:text-sm h-max border-cyan-500"
+              className="badge bg-slate-300 flex flex-row text-black bg-slate-300-100 rounded-xl text-xs md:text-sm h-max border-2 border-black-500"
             >
-              <div flex flex-col>
+              <div className="flex flex-col items-center">
                 <div>X: {ob.x}</div>
                 <div>Y: {ob.y}</div>
                 <div>D: {DirectionToString[ob.d]}</div>
@@ -494,6 +518,9 @@ export default function Simulator() {
           );
         })}
       </div>
+</div>
+
+   
       <div className="btn-group btn-group-horizontal py-4">
         <button className="btn btn-error" onClick={onResetAll}>
           Reset All
@@ -507,7 +534,7 @@ export default function Simulator() {
       </div>
 
       {path.length > 0 && (
-        <div className="flex flex-row items-center text-center bg-sky-200 p-4 rounded-xl shadow-xl my-8">
+        <div className="flex flex-row items-center text-center bg-slate-300 p-4 rounded-xl shadow-xl my-8">
           <button
             className="btn btn-circle pt-2 pl-1"
             disabled={page === 0}
@@ -530,7 +557,7 @@ export default function Simulator() {
               />
             </svg>
           </button>
-
+       
           <span className="mx-5 text-black">
             Step: {page + 1} / {path.length}
           </span>
@@ -559,9 +586,23 @@ export default function Simulator() {
           </button>
         </div>
       )}
-      <table className="border-collapse border-none border-black ">
+      <div className="grid grid-cols-3 gap-2">
+      <table className="border-collapse border-none border-slate-300 col-span-2 ">
         <tbody>{renderGrid()}</tbody>
       </table>
+      {
+            commands.length > 0 &&
+            <div className="flex flex-col items-center">
+            <h1 className="text-black text-2xl font-bold">Path Instructions</h1>
+              <ul>
+               {commands.map((command, index) => (
+                <li className={`p-2 bg-blue-200 rounded-md shadow-md my-2 ${(index + 1) == page ? "bg-blue-500 text-white": "bg-blue-200"}`} key={index}>{index+1}:{command}</li>
+              ))}
+            </ul>
+            </div>
+          }
+      </div>
+     
     </div>
   );
 }
