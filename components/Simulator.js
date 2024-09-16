@@ -51,9 +51,12 @@ export default function Simulator() {
   const [directionInput, setDirectionInput] = useState(ObDirection.NORTH);
   const [isComputing, setIsComputing] = useState(false);
   const [path, setPath] = useState([]);
+  const [altPath, setAltPath] = useState([]);
+  const [altCommands, setAltCommands] = useState([]);
   const [commands, setCommands] = useState([]);
   const [page, setPage] = useState(0);
-
+  const [showAltPath, setShowAltPath] = useState(false);
+  const [showPath, setshowPath] = useState(true);
   const generateNewID = () => {
     while (true) {
       let new_id = Math.floor(Math.random() * 10) + 1; // just try to generate an id;
@@ -220,15 +223,19 @@ export default function Simulator() {
         // If the data is valid, set the path
         setPath(data.data.path);
         // Set the commands
-        const commands = [];
-        for (let x of data.data.commands) {
-          // If the command is a snapshot, skip it
-          if (x.startsWith("SNAP")) {
-            continue;
-          }
-          commands.push(x);
-        }
+        const commands = data.data.commands.filter(x => !x.startsWith("SNAP"))
         setCommands(commands);
+
+        const altObstacles = [...obstacles, {x: 16, y:10, d:ObDirection.NORTH, id:999 }]
+        QueryAPI.query(altObstacles, robotX, robotY, robotDir,(altData, altErr)=>{
+          if(altData){
+            setAltPath(altData.data.path);
+            const altCommands  = altData.data.commands.filter(x => !x.startsWith("SNAP"))
+            setAltCommands(altCommands)
+          }
+        })
+        console.log(path)
+        console.log(altPath)
       }
       // Set computing to false, release the lock
       setIsComputing(false);
@@ -293,7 +300,7 @@ export default function Simulator() {
     const rows = [];
     const robotCells = generateRobotCells();
     const pathCoordinates = generatePathCoordinates(path);
-
+    const altPathCoordinates = generatePathCoordinates(altPath);
     for (let i = 0; i < 20; i++) {
       const cells = [
         <td key={i} className="w-5 h-5 md:w-8 md:h-8">
@@ -307,7 +314,7 @@ export default function Simulator() {
         let foundOb = null;
         let foundRobotCell = null;
         let isPathCell = false;
-  
+        let isAltPathCell = false;
         // Check if the current cell is part of the path
         isPathCell = pathCoordinates.some(step => {
           const transformed = transformCoord(step.x, step.y);
@@ -319,6 +326,11 @@ export default function Simulator() {
           const transformed = transformCoord(ob.x, ob.y);
           return transformed.x === i && transformed.y === j;
         });
+
+        isAltPathCell = altPathCoordinates.some(step => {
+          const transformed = transformCoord(step.x, step.y)
+          return transformed.x === i & transformed.y === j;
+        })
   
         // Check for robot cells
         if (!foundOb) {
@@ -353,16 +365,22 @@ export default function Simulator() {
               }`}
             />
           );
-        } else if (isPathCell) {
-          // Render path cell
+        } else if(isPathCell && showPath) {
+          // Render empty cell
           cells.push(
             <td 
               key={`${i}-${j}`} 
-              className="border w-5 h-5 md:w-8 md:h-8 bg-blue-400" 
+              className="border-slate-300 border w-5 h-5 bg-blue-400 md:w-8 md:h-8" 
             />
           );
-        } else {
-          // Render empty cell
+        }else if(isAltPathCell && showAltPath ){
+          cells.push(
+            <td 
+              key={`${i}-${j}`} 
+              className="border-slate-300 border w-5 h-5 bg-pink-400 md:w-8 md:h-8" 
+            />
+          );
+        }else{
           cells.push(
             <td 
               key={`${i}-${j}`} 
@@ -530,6 +548,13 @@ export default function Simulator() {
         </button>
         <button className="btn btn-success" onClick={compute}>
           Submit
+        </button>
+        <button className="btn btn-neutral" onClick={()=>{
+          setShowAltPath(!showAltPath)
+          setshowPath(!showPath)
+          console.log(showAltPath, showPath)
+          }}>
+          Show Alt Path
         </button>
       </div>
 
